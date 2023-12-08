@@ -246,8 +246,7 @@ function parseEvents(ethernaut, txReceipt, isValidEvent) {
       }
     })
     .filter(Boolean);
-  events.filter((event) => isValidEvent(event));
-  return events;
+  return events.filter((event) => isValidEvent(event));
 }
 
 const submitLevel = async (address) => {
