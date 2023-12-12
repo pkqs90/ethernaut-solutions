@@ -11,6 +11,7 @@ const { SEPOLIA_ARCHIVE_URL, TESTING_ACCOUNT_PRIVATE_KEY } = process.env;
 module.exports = {
   solidity: {
     compilers: [
+      { version: "0.5.0" },
       { version: "0.6.0" },
       { version: "0.6.10" },
       { version: "0.7.0" },
